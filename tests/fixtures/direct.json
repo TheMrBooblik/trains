@@ -1,0 +1,14 @@
+[
+  { "id": "8002549", "name": "Hamburg Hbf", "location": { "type": "location", "id": "8002549", "latitude": 53.552736, "longitude": 10.006909 }, "duration": 104 },
+  { "id": "8010205", "name": "Leipzig Hbf", "location": { "type": "location", "id": "8010205", "latitude": 51.345219, "longitude": 12.381685 }, "duration": 75 },
+  { "id": "8000152", "name": "Hannover Hbf", "location": { "type": "location", "id": "8000152", "latitude": 52.376761, "longitude": 9.741021 }, "duration": 100 },
+  { "id": "8000105", "name": "Frankfurt(Main)Hbf", "location": { "type": "location", "id": "8000105", "latitude": 50.107145, "longitude": 8.663789 }, "duration": 255 },
+  { "id": "8000261", "name": "München Hbf", "location": { "type": "location", "id": "8000261", "latitude": 48.140232, "longitude": 11.558335 }, "duration": 240 },
+  { "id": "8000207", "name": "Köln Hbf", "location": { "type": "location", "id": "8000207", "latitude": 50.943029, "longitude": 6.958731 }, "duration": 260 },
+  { "id": "8098160", "name": "Stuttgart Hbf", "location": { "type": "location", "id": "8098160", "latitude": 48.784084, "longitude": 9.181635 }, "duration": 335 },
+  { "id": "8100003", "name": "Wien Hbf", "location": { "type": "location", "id": "8100003", "latitude": 48.185507, "longitude": 16.375326 }, "duration": 470 },
+  { "id": "8500010", "name": "Basel SBB", "location": { "type": "location", "id": "8500010", "latitude": 47.547408, "longitude": 7.589548 }, "duration": 430 },
+  { "id": "8400058", "name": "Amsterdam Centraal", "location": { "type": "location", "id": "8400058", "latitude": 52.378939, "longitude": 4.900846 }, "duration": 375 },
+  { "id": "8800004", "name": "Bruxelles-Midi", "location": { "type": "location", "id": "8800004", "latitude": 50.835707, "longitude": 4.336531 }, "duration": 555 },
+  { "id": "5100067", "name": "Warszawa Centralna", "location": { "type": "location", "id": "5100067", "latitude": 52.228815, "longitude": 21.003337 }, "duration": 320 }
+]

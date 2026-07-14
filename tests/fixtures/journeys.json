@@ -1,0 +1,35 @@
+{
+  "journeys": [
+    {
+      "type": "journey",
+      "legs": [
+        {
+          "origin": { "type": "stop", "id": "8011160", "name": "Berlin Hbf" },
+          "destination": { "type": "stop", "id": "8002549", "name": "Hamburg Hbf" },
+          "departure": "2026-07-15T08:38:00+02:00",
+          "plannedDeparture": "2026-07-15T08:38:00+02:00",
+          "arrival": "2026-07-15T10:22:00+02:00",
+          "plannedArrival": "2026-07-15T10:22:00+02:00",
+          "line": { "type": "line", "id": "ice-802", "name": "ICE 802", "mode": "train", "product": "nationalExpress" }
+        }
+      ],
+      "price": { "amount": 19.99, "currency": "EUR", "hint": null }
+    },
+    {
+      "type": "journey",
+      "legs": [
+        {
+          "origin": { "type": "stop", "id": "8011160", "name": "Berlin Hbf" },
+          "destination": { "type": "stop", "id": "8002549", "name": "Hamburg Hbf" },
+          "departure": "2026-07-15T09:04:00+02:00",
+          "plannedDeparture": "2026-07-15T09:04:00+02:00",
+          "arrival": "2026-07-15T10:53:00+02:00",
+          "plannedArrival": "2026-07-15T10:53:00+02:00",
+          "line": { "type": "line", "id": "ice-1601", "name": "ICE 1601", "mode": "train", "product": "nationalExpress" }
+        }
+      ],
+      "price": { "amount": 24.99, "currency": "EUR", "hint": null }
+    }
+  ],
+  "realtimeDataUpdatedAt": 1784102400
+}

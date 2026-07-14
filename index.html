@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trainmap — direct trains from anywhere</title>
+  <meta name="description" content="Pick a station, see every direct train destination with live prices. Like Google Flights, for trains.">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="layout">
+    <aside class="panel" id="panel">
+      <header class="brand">
+        <h1>🚆 Trainmap</h1>
+        <p class="tagline">Pick a station — see every <strong>direct</strong> train destination, with live prices.</p>
+      </header>
+
+      <section class="controls">
+        <div class="field search-field">
+          <label for="station-input">From station</label>
+          <input id="station-input" type="text" autocomplete="off" spellcheck="false"
+                 placeholder="e.g. Berlin Hbf, Wien Hbf, Paris Est…">
+          <ul id="suggestions" class="suggestions" hidden></ul>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="date-input">Travel date</label>
+            <input id="date-input" type="date">
+          </div>
+          <div class="field">
+            <label for="time-input">Depart after</label>
+            <input id="time-input" type="time" value="08:00" step="900">
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="load-prices-btn" class="btn primary" disabled>Load live prices</button>
+          <button id="stop-prices-btn" class="btn" hidden>Stop</button>
+          <button id="refresh-btn" class="btn subtle" disabled title="Re-fetch the direct-destination network for this station">↻ Refresh network</button>
+        </div>
+        <div id="price-progress" class="progress" hidden>
+          <div class="progress-bar"><div id="price-progress-fill" class="progress-fill"></div></div>
+          <span id="price-progress-label" class="progress-label"></span>
+        </div>
+      </section>
+
+      <div id="alert" class="alert" hidden></div>
+
+      <section class="tiles" id="tiles" hidden>
+        <div class="tile">
+          <span class="tile-value" id="tile-count">–</span>
+          <span class="tile-label">direct destinations</span>
+        </div>
+        <div class="tile">
+          <span class="tile-value" id="tile-under2h">–</span>
+          <span class="tile-label">reachable ≤ 2 h</span>
+        </div>
+        <div class="tile">
+          <span class="tile-value" id="tile-cheapest">–</span>
+          <span class="tile-label">cheapest fare found</span>
+        </div>
+      </section>
+
+      <section class="legend" id="legend" hidden>
+        <span class="legend-title">Travel time</span>
+        <ul>
+          <li><i style="background:#6da7ec"></i> &lt; 2 h</li>
+          <li><i style="background:#3987e5"></i> 2–4 h</li>
+          <li><i style="background:#256abf"></i> 4–6 h</li>
+          <li><i style="background:#184f95"></i> 6–8 h</li>
+          <li><i style="background:#0d366b"></i> 8 h +</li>
+        </ul>
+      </section>
+
+      <section class="dest-section" id="dest-section" hidden>
+        <div class="dest-header">
+          <h2 id="dest-title">Destinations</h2>
+          <label class="sort-label">sort
+            <select id="sort-select">
+              <option value="duration">by travel time</option>
+              <option value="price">by price</option>
+              <option value="name">by name</option>
+            </select>
+          </label>
+        </div>
+        <ol id="dest-list" class="dest-list"></ol>
+      </section>
+
+      <footer class="status">
+        <div class="status-row"><span class="dot" id="dot-db"></span> Timetables &amp; prices: <a href="https://v6.db.transport.rest" target="_blank" rel="noopener">bahn.de HAFAS (live)</a> <span id="status-db" class="status-note">idle</span></div>
+        <div class="status-row"><span class="dot" id="dot-direkt"></span> Direct-route network: <a href="https://direkt.bahn.guru" target="_blank" rel="noopener">direkt.bahn.guru</a> <span id="status-direkt" class="status-note">idle</span></div>
+        <div class="status-row" id="freshness" hidden></div>
+        <div class="status-row disclaimer">Prototype · booking happens on the operator's own site · no data is fixed in code — everything above is fetched live.</div>
+      </footer>
+    </aside>
+
+    <div id="map" role="application" aria-label="Map of direct train destinations"></div>
+  </main>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
