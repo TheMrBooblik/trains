@@ -44,6 +44,25 @@ jobs:
             -H "Origin: https://themrbooblik.github.io" \
             "https://api.transitous.org/api/v1/geocode?text=berlin%20hbf" \
             | head -c 2500 || echo "REQUEST FAILED"
+      - name: transitous discovery — geocode → stoptimes → trip response shapes
+        run: |
+          GEO=$(curl -sS --max-time 25 --get "https://api.transitous.org/api/v1/geocode" \
+            --data-urlencode "text=berlin hbf" --data-urlencode "type=STOP")
+          echo "── geocode (first 800) ──"; echo "$GEO" | head -c 800; echo
+          SID=$(echo "$GEO" | jq -r '[.[] | select(.type=="STOP")][0].id')
+          echo "stopId=$SID"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          ST=$(curl -sS --max-time 25 --get "https://api.transitous.org/api/v1/stoptimes" \
+            --data-urlencode "stopId=$SID" --data-urlencode "time=$NOW" --data-urlencode "n=8")
+          echo "── stoptimes (first 3500) ──"; echo "$ST" | head -c 3500; echo
+          TID=$(echo "$ST" | jq -r '.stopTimes[0].tripId // empty')
+          echo "tripId=$TID"
+          if [ -n "$TID" ]; then
+            curl -sS --max-time 25 --get "https://api.transitous.org/api/v1/trip" \
+              --data-urlencode "tripId=$TID" | head -c 3500
+          else
+            echo "no tripId found — dump keys:"; echo "$ST" | jq 'keys? // type'
+          fi
       - name: verdict (fails when station search is unusable)
         run: |
           code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 \
