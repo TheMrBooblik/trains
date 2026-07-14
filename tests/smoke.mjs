@@ -41,10 +41,14 @@ const browser = await chromium.launch({ executablePath, args: ['--no-sandbox'] }
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 
 const apiLog = [];
+let locationCalls = 0;
 await page.route('**://v6.db.transport.rest/**', async (route) => {
   const url = new URL(route.request().url());
   apiLog.push(url.pathname + url.search);
   if (url.pathname === '/locations') {
+    // First call fails with 503: the app must retry transparently (resilience path).
+    locationCalls += 1;
+    if (locationCalls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic outage"}' });
     return route.fulfill({ contentType: 'application/json', body: await fixture('locations.json') });
   }
   if (url.pathname === '/journeys') {
@@ -76,9 +80,10 @@ check('page loads with title', (await page.title()).includes('Trainmap'));
 
 // 1. search
 await page.fill('#station-input', 'berlin');
-await page.waitForSelector('#suggestions li', { timeout: 5000 });
+await page.waitForSelector('#suggestions li', { timeout: 10000 });
 const suggestions = await page.$$eval('#suggestions li', (els) => els.map((e) => e.textContent));
 check('autocomplete shows Berlin Hbf', suggestions.some((s) => s.includes('Berlin Hbf')));
+check('search survived a transient 503 via retry', locationCalls >= 2);
 
 // 2. pick origin -> destinations render
 await page.click('#suggestions li');

@@ -1,0 +1,36 @@
+name: API health check
+
+# Probes the two live data sources from a neutral network (the CI runner),
+# including the CORS headers a browser needs. Runs on PRs and on demand.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: v6.db.transport.rest /locations (station search)
+        run: |
+          curl -sS -i --max-time 25 \
+            -H "Origin: https://themrbooblik.github.io" \
+            "https://v6.db.transport.rest/locations?query=berlin%20hbf&results=1" \
+            | head -c 2500 || echo "REQUEST FAILED"
+      - name: v6.db.transport.rest /journeys (live prices)
+        run: |
+          curl -sS -i --max-time 25 \
+            -H "Origin: https://themrbooblik.github.io" \
+            "https://v6.db.transport.rest/journeys?from=8011160&to=8002549&transfers=0&results=1&stopovers=false&remarks=false" \
+            | head -c 2500 || echo "REQUEST FAILED"
+      - name: api.direkt.bahn.guru (direct-route network)
+        run: |
+          curl -sS -i --max-time 25 \
+            -H "Origin: https://themrbooblik.github.io" \
+            "https://api.direkt.bahn.guru/8011160?localTrainsOnly=false" \
+            | head -c 2500 || echo "REQUEST FAILED"
+      - name: verdict (fails when station search is unusable)
+        run: |
+          code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 \
+            "https://v6.db.transport.rest/locations?query=berlin&results=1" || echo 000)
+          echo "locations endpoint HTTP status: $code"
+          test "$code" = "200"
