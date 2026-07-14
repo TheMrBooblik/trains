@@ -31,26 +31,48 @@
     listeners.health.forEach((fn) => fn(source, ok, detail));
   }
 
-  async function fetchJSON(url, { timeoutMs = 20000, source = 'db' } = {}) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, { signal: ctrl.signal });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        const err = new Error(`HTTP ${res.status} from ${new URL(url).host}${body ? ` — ${body.slice(0, 140)}` : ''}`);
-        err.status = res.status;
-        throw err;
+  const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+  function friendlyError(err, url) {
+    const host = new URL(url).host;
+    if (err.name === 'AbortError') return `request to ${host} timed out — the free API may be overloaded, try again in a minute`;
+    if (err.status === 429) return `${host} is rate-limiting right now (it's a free community API) — wait a minute and retry`;
+    if (err.status >= 500) return `${host} is temporarily unavailable (HTTP ${err.status}) — it usually recovers within minutes`;
+    if (err.status) return err.message;
+    // TypeError "Failed to fetch": DNS/connection/CORS failure before any HTTP response
+    return `could not reach ${host} — the API may be briefly down, or something (ad-blocker, firewall) is blocking it; retrying usually works`;
+  }
+
+  async function fetchJSON(url, { timeoutMs = 20000, source = 'db', retries = 2 } = {}) {
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 1500 * attempt));
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          const err = new Error(`HTTP ${res.status} from ${new URL(url).host}${body ? ` — ${body.slice(0, 140)}` : ''}`);
+          err.status = res.status;
+          throw err;
+        }
+        const data = await res.json();
+        reportHealth(source, true);
+        return data;
+      } catch (err) {
+        lastErr = err;
+        const transient = err.name === 'AbortError' || err instanceof TypeError || RETRYABLE_STATUS.has(err.status);
+        if (transient && attempt < retries) continue;
+        const friendly = new Error(friendlyError(err, url));
+        friendly.status = err.status;
+        reportHealth(source, false, friendly.message);
+        throw friendly;
+      } finally {
+        clearTimeout(timer);
       }
-      const data = await res.json();
-      reportHealth(source, true);
-      return data;
-    } catch (err) {
-      reportHealth(source, false, err.message);
-      throw err;
-    } finally {
-      clearTimeout(timer);
     }
+    throw lastErr; // unreachable, satisfies control flow
   }
 
   /* ---- global request queue: spaces out API calls, cancellable ---- */
@@ -176,7 +198,13 @@
     return `https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so=${encodeURIComponent(fromName)}&zo=${encodeURIComponent(toName)}&hd=${hd}`;
   }
 
+  /* one cheap request, no retries — used at boot to detect upstream outages */
+  function ping() {
+    return fetchJSON(`${DB_API}/locations?query=berlin&results=1`, { source: 'db', retries: 0, timeoutMs: 12000 });
+  }
+
   window.TrainmapAPI = {
+    ping,
     searchStations,
     getStation,
     getDirectDestinations,

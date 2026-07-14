@@ -66,6 +66,21 @@ The prototype is a responsive web app. The intended mobile path is a thin wrappe
 (Capacitor) around the same codebase — one codebase, both stores, only the store fees
 (req. 1). The map-first UI already works on phone viewports.
 
+## Single-provider risk (learned the hard way)
+
+On 2026-07-14 both community APIs had a same-day infrastructure outage
+(`v6.db.transport.rest` → HTTP 503; `api.direkt.bahn.guru` → default reverse-proxy
+TLS certificate). The app now detects this at boot and explains it instead of
+failing cryptically, and the `API health check` workflow (Actions tab) probes all
+sources on demand to separate "API down" from "app broken".
+
+Validated fallback candidate: **[Transitous](https://transitous.org)**
+(`api.transitous.org`, MOTIS) — free, community-run, CORS-open (`*`), worldwide
+coverage from GTFS feeds. Confirmed healthy from CI with usable station search
+(`/api/v1/geocode`). It has no prices, so it can back up station search and
+timetables but not fares; wiring it in as a second adapter is the next step on
+the roadmap above.
+
 ## Known prototype limitations (honest list)
 
 - Fares come from DB's price API: reliable for German long-distance; regional-only and

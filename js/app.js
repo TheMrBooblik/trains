@@ -92,7 +92,17 @@
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-  function showAlert(msg) { ui.alert.textContent = msg; ui.alert.hidden = false; }
+  function showAlert(msg, retryFn) {
+    ui.alert.textContent = msg;
+    if (retryFn) {
+      const btn = document.createElement('button');
+      btn.className = 'btn alert-retry';
+      btn.textContent = 'Retry';
+      btn.addEventListener('click', () => { clearAlert(); retryFn(); });
+      ui.alert.appendChild(btn);
+    }
+    ui.alert.hidden = false;
+  }
   function clearAlert() { ui.alert.hidden = true; }
 
   function departureISO() {
@@ -125,7 +135,7 @@
       } catch (err) {
         if (seq !== searchSeq) return;
         ui.suggestions.hidden = true;
-        showAlert(`Station search failed — ${err.message}`);
+        showAlert(`Station search failed — ${err.message}`, () => ui.input.dispatchEvent(new Event('input')));
       }
     }, 300);
   });
@@ -198,8 +208,9 @@
       ui.refresh.disabled = false;
       const hint = err.status === 404
         ? 'This station is not in the direct-connection index — try the main station of the city.'
-        : 'The route-network service may be briefly unavailable — try again in a minute.';
-      showAlert(`Could not load direct destinations — ${err.message}. ${hint}`);
+        : 'The route-network service may be briefly unavailable.';
+      showAlert(`Could not load direct destinations — ${err.message}. ${hint}`,
+        err.status === 404 ? null : () => selectOrigin(station, { force }));
     }
   }
 
@@ -417,5 +428,13 @@
         .then((st) => { ui.input.value = st.name; selectOrigin(st); })
         .catch(() => { /* stale hash — ignore */ });
     }
+
+    // Surface an upstream outage immediately instead of on the first keystroke.
+    API.ping().catch((err) => {
+      showAlert(`Heads-up: the live timetable source appears to be unavailable right now — ${err.message} ` +
+        'Trainmap fetches everything live (nothing is hardcoded), so search stays empty until the source recovers. ' +
+        'Community-API outages usually last hours, not days.',
+        () => location.reload());
+    });
   })();
 })();

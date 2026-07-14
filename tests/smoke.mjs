@@ -41,10 +41,15 @@ const browser = await chromium.launch({ executablePath, args: ['--no-sandbox'] }
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 
 const apiLog = [];
+let locationCalls = 0;
 await page.route('**://v6.db.transport.rest/**', async (route) => {
   const url = new URL(route.request().url());
   apiLog.push(url.pathname + url.search);
   if (url.pathname === '/locations') {
+    // First two calls fail with 503: the boot ping must show the outage banner,
+    // and the first user search must retry transparently (resilience path).
+    locationCalls += 1;
+    if (locationCalls <= 2) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic outage"}' });
     return route.fulfill({ contentType: 'application/json', body: await fixture('locations.json') });
   }
   if (url.pathname === '/journeys') {
@@ -74,11 +79,16 @@ page.on('pageerror', (err) => failures.push(`pageerror: ${err.message}`));
 await page.goto(base, { waitUntil: 'load' });
 check('page loads with title', (await page.title()).includes('Trainmap'));
 
+// 0. boot ping fails (503) -> outage banner up front
+await page.waitForSelector('#alert:not([hidden])', { timeout: 8000 });
+check('outage banner shown at boot', (await page.textContent('#alert')).includes('unavailable'));
+
 // 1. search
 await page.fill('#station-input', 'berlin');
-await page.waitForSelector('#suggestions li', { timeout: 5000 });
+await page.waitForSelector('#suggestions li', { timeout: 10000 });
 const suggestions = await page.$$eval('#suggestions li', (els) => els.map((e) => e.textContent));
 check('autocomplete shows Berlin Hbf', suggestions.some((s) => s.includes('Berlin Hbf')));
+check('search survived a transient 503 via retry', locationCalls >= 2);
 
 // 2. pick origin -> destinations render
 await page.click('#suggestions li');
