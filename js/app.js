@@ -428,5 +428,13 @@
         .then((st) => { ui.input.value = st.name; selectOrigin(st); })
         .catch(() => { /* stale hash — ignore */ });
     }
+
+    // Surface an upstream outage immediately instead of on the first keystroke.
+    API.ping().catch((err) => {
+      showAlert(`Heads-up: the live timetable source appears to be unavailable right now — ${err.message} ` +
+        'Trainmap fetches everything live (nothing is hardcoded), so search stays empty until the source recovers. ' +
+        'Community-API outages usually last hours, not days.',
+        () => location.reload());
+    });
   })();
 })();

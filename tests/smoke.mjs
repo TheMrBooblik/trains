@@ -46,9 +46,10 @@ await page.route('**://v6.db.transport.rest/**', async (route) => {
   const url = new URL(route.request().url());
   apiLog.push(url.pathname + url.search);
   if (url.pathname === '/locations') {
-    // First call fails with 503: the app must retry transparently (resilience path).
+    // First two calls fail with 503: the boot ping must show the outage banner,
+    // and the first user search must retry transparently (resilience path).
     locationCalls += 1;
-    if (locationCalls === 1) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic outage"}' });
+    if (locationCalls <= 2) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic outage"}' });
     return route.fulfill({ contentType: 'application/json', body: await fixture('locations.json') });
   }
   if (url.pathname === '/journeys') {
@@ -77,6 +78,10 @@ page.on('pageerror', (err) => failures.push(`pageerror: ${err.message}`));
 
 await page.goto(base, { waitUntil: 'load' });
 check('page loads with title', (await page.title()).includes('Trainmap'));
+
+// 0. boot ping fails (503) -> outage banner up front
+await page.waitForSelector('#alert:not([hidden])', { timeout: 8000 });
+check('outage banner shown at boot', (await page.textContent('#alert')).includes('unavailable'));
 
 // 1. search
 await page.fill('#station-input', 'berlin');

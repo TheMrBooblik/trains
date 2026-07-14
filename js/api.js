@@ -198,7 +198,13 @@
     return `https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so=${encodeURIComponent(fromName)}&zo=${encodeURIComponent(toName)}&hd=${hd}`;
   }
 
+  /* one cheap request, no retries — used at boot to detect upstream outages */
+  function ping() {
+    return fetchJSON(`${DB_API}/locations?query=berlin&results=1`, { source: 'db', retries: 0, timeoutMs: 12000 });
+  }
+
   window.TrainmapAPI = {
+    ping,
     searchStations,
     getStation,
     getDirectDestinations,
