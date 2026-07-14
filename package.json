@@ -1,0 +1,14 @@
+{
+  "name": "trainmap",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Google Flights for trains — pick a station, see every direct destination with live prices.",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve -l 8080 .",
+    "test": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.61.1"
+  }
+}

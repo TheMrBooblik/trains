@@ -1,0 +1,16 @@
+[
+  {
+    "type": "stop",
+    "id": "8011160",
+    "name": "Berlin Hbf",
+    "location": { "type": "location", "id": "8011160", "latitude": 52.524925, "longitude": 13.369629 },
+    "products": { "nationalExpress": true, "national": true, "regionalExpress": true, "regional": true, "suburban": true, "bus": true, "ferry": false, "subway": true, "tram": true, "taxi": false }
+  },
+  {
+    "type": "stop",
+    "id": "8089021",
+    "name": "Berlin Hbf (tief)",
+    "location": { "type": "location", "id": "8089021", "latitude": 52.525849, "longitude": 13.368928 },
+    "products": { "nationalExpress": false, "national": false, "regionalExpress": true, "regional": true, "suburban": true, "bus": false, "ferry": false, "subway": false, "tram": false, "taxi": false }
+  }
+]
