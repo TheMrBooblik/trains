@@ -28,6 +28,22 @@ jobs:
             -H "Origin: https://themrbooblik.github.io" \
             "https://api.direkt.bahn.guru/8011160?localTrainsOnly=false" \
             | head -c 2500 || echo "REQUEST FAILED"
+      - name: api.direkt.bahn.guru TLS details
+        run: |
+          echo | openssl s_client -connect api.direkt.bahn.guru:443 -servername api.direkt.bahn.guru 2>/dev/null \
+            | openssl x509 -noout -subject -issuer -dates || echo "TLS INSPECT FAILED"
+      - name: candidate fallback — bahn.expert station search
+        run: |
+          curl -sS -i --max-time 25 \
+            -H "Origin: https://themrbooblik.github.io" \
+            "https://bahn.expert/api/stopPlace/v1/search/berlin%20hbf?max=3" \
+            | head -c 2500 || echo "REQUEST FAILED"
+      - name: candidate fallback — transitous geocode
+        run: |
+          curl -sS -i --max-time 25 \
+            -H "Origin: https://themrbooblik.github.io" \
+            "https://api.transitous.org/api/v1/geocode?text=berlin%20hbf" \
+            | head -c 2500 || echo "REQUEST FAILED"
       - name: verdict (fails when station search is unusable)
         run: |
           code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 \
