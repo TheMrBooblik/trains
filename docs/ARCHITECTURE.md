@@ -74,12 +74,16 @@ TLS certificate). The app now detects this at boot and explains it instead of
 failing cryptically, and the `API health check` workflow (Actions tab) probes all
 sources on demand to separate "API down" from "app broken".
 
-Validated fallback candidate: **[Transitous](https://transitous.org)**
-(`api.transitous.org`, MOTIS) — free, community-run, CORS-open (`*`), worldwide
-coverage from GTFS feeds. Confirmed healthy from CI with usable station search
-(`/api/v1/geocode`). It has no prices, so it can back up station search and
-timetables but not fares; wiring it in as a second adapter is the next step on
-the roadmap above.
+**Implemented fallback: [Transitous](https://transitous.org)** (`api.transitous.org`,
+MOTIS) — free, community-run, CORS-open (`*`), worldwide coverage from GTFS feeds.
+When the boot health-ping (or any live call) finds the bahn stack down, the app
+switches automatically: station search via `/geocode`, and direct destinations
+computed live from `/stoptimes` (departures at the origin, deduped per
+line+direction) + `/trip` (each train's full stop sequence — every downstream
+stop is a direct destination). Transitous has no fares, so in fallback mode the
+UI hides price features and says why; prices return when the primary recovers.
+This is the source-adapter pattern proving itself: same three-call interface,
+second provider, zero UI rewrite.
 
 ## Known prototype limitations (honest list)
 

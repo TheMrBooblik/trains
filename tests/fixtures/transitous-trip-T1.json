@@ -1,0 +1,65 @@
+{
+  "duration": 6780,
+  "startTime": "2026-07-15T07:52:00Z",
+  "endTime": "2026-07-15T09:45:00Z",
+  "transfers": 0,
+  "legs": [
+    {
+      "mode": "HIGHSPEED_RAIL",
+      "from": {
+        "name": "S Südkreuz Bhf (Berlin)",
+        "stopId": "de-DELFI_sk",
+        "lat": 52.475433,
+        "lon": 13.365603,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T07:52:00Z",
+        "scheduledDeparture": "2026-07-15T07:52:00Z",
+        "cancelled": false
+      },
+      "to": {
+        "name": "Hamburg Hbf",
+        "stopId": "de-DELFI_hh",
+        "lat": 53.552736,
+        "lon": 10.006909,
+        "tz": "Europe/Berlin",
+        "arrival": "2026-07-15T09:45:00Z",
+        "scheduledArrival": "2026-07-15T09:45:00Z",
+        "cancelled": false
+      },
+      "duration": 6780,
+      "startTime": "2026-07-15T07:52:00Z",
+      "endTime": "2026-07-15T09:45:00Z",
+      "realTime": true,
+      "headsign": "Hamburg Hbf",
+      "routeId": "de-DELFI_r_ice_1",
+      "agencyName": "DB Fernverkehr AG",
+      "tripId": "20260715_T1",
+      "routeShortName": "ICE 802",
+      "displayName": "ICE 802",
+      "cancelled": false,
+      "intermediateStops": [
+        {
+          "name": "S+U Berlin Hauptbahnhof",
+          "stopId": "de-DELFI_de:11000:900003200:4:56",
+          "parentId": "de-DELFI_de:11000:900003201",
+          "lat": 52.52519,
+          "lon": 13.369752,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-15T07:56:00Z",
+          "departure": "2026-07-15T08:00:00Z",
+          "cancelled": false
+        },
+        {
+          "name": "Wittenberge",
+          "stopId": "de-DELFI_wb",
+          "lat": 52.998645,
+          "lon": 11.750049,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-15T08:50:00Z",
+          "departure": "2026-07-15T08:52:00Z",
+          "cancelled": false
+        }
+      ]
+    }
+  ]
+}

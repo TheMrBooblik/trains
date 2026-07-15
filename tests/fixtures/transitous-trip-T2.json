@@ -1,0 +1,55 @@
+{
+  "duration": 5400,
+  "startTime": "2026-07-15T08:05:00Z",
+  "endTime": "2026-07-15T09:35:00Z",
+  "transfers": 0,
+  "legs": [
+    {
+      "mode": "REGIONAL_RAIL",
+      "from": {
+        "name": "S+U Berlin Hauptbahnhof",
+        "stopId": "de-DELFI_de:11000:900003200:1:50",
+        "parentId": "de-DELFI_de:11000:900003201",
+        "lat": 52.52496,
+        "lon": 13.368911,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T08:05:00Z",
+        "scheduledDeparture": "2026-07-15T08:05:00Z",
+        "cancelled": false
+      },
+      "to": {
+        "name": "Cottbus Hbf",
+        "stopId": "de-DELFI_cb",
+        "lat": 51.756332,
+        "lon": 14.332887,
+        "tz": "Europe/Berlin",
+        "arrival": "2026-07-15T09:35:00Z",
+        "scheduledArrival": "2026-07-15T09:35:00Z",
+        "cancelled": false
+      },
+      "duration": 5400,
+      "startTime": "2026-07-15T08:05:00Z",
+      "endTime": "2026-07-15T09:35:00Z",
+      "realTime": true,
+      "headsign": "Cottbus Hbf",
+      "routeId": "de-DELFI_r_re_2",
+      "agencyName": "DB Regio AG",
+      "tripId": "20260715_T2",
+      "routeShortName": "RE 2",
+      "displayName": "RE 2",
+      "cancelled": false,
+      "intermediateStops": [
+        {
+          "name": "Königs Wusterhausen",
+          "stopId": "de-DELFI_kw",
+          "lat": 52.301049,
+          "lon": 13.632999,
+          "tz": "Europe/Berlin",
+          "arrival": "2026-07-15T08:35:00Z",
+          "departure": "2026-07-15T08:36:00Z",
+          "cancelled": false
+        }
+      ]
+    }
+  ]
+}

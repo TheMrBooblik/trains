@@ -1,0 +1,36 @@
+[
+  {
+    "type": "STOP",
+    "name": "Berlin Hbf",
+    "id": "de-DELFI_de:11000:900003201",
+    "lat": 52.52498,
+    "lon": 13.369114,
+    "level": -2.0,
+    "country": "DE",
+    "tz": "Europe/Berlin",
+    "modes": ["HIGHSPEED_RAIL", "LONG_DISTANCE", "NIGHT_RAIL", "REGIONAL_RAIL", "SUBURBAN", "BUS"],
+    "score": -29.65
+  },
+  {
+    "type": "PLACE",
+    "category": "hotel_16",
+    "name": "Ibis Berlin Hauptbahnhof",
+    "id": "way/[237687064]",
+    "lat": 52.5270751,
+    "lon": 13.370017,
+    "country": "DE",
+    "tz": "Europe/Berlin",
+    "score": -23.25
+  },
+  {
+    "type": "STOP",
+    "name": "Berlin Hauptbahnhof (bus stop)",
+    "id": "de-DELFI_de:11000:900003299",
+    "lat": 52.5251,
+    "lon": 13.3688,
+    "country": "DE",
+    "tz": "Europe/Berlin",
+    "modes": ["BUS"],
+    "score": -20.0
+  }
+]

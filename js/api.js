@@ -1,34 +1,54 @@
 /**
- * Data layer. Two live, free, keyless sources:
+ * Data layer with two source stacks:
  *
+ *  PRIMARY (bahn stack) — full feature set including live prices:
  *  - v6.db.transport.rest  — community REST wrapper around Deutsche Bahn's
- *    HAFAS endpoint. Station search, journeys and *live prices*. Covers
- *    Germany fully plus most European long-distance stations.
+ *    endpoint. Station search, journeys and *live prices*. Covers Germany
+ *    fully plus most European long-distance stations.
  *    Rate limit: 100 req/min, CORS enabled. https://v6.db.transport.rest
- *
  *  - api.direkt.bahn.guru  — index of *direct* (no-change) connections per
  *    station, derived from the same live timetable data.
- *    https://direkt.bahn.guru
+ *
+ *  FALLBACK (Transitous) — timetables without prices, used automatically
+ *  when the primary stack is down (it is community-run and has outages):
+ *  - api.transitous.org (MOTIS) — free, CORS-open, worldwide GTFS-based.
+ *    Station search via /geocode; direct destinations computed live from
+ *    /stoptimes (departures at the origin) + /trip (each train's full stop
+ *    sequence). No fares — prices return when the primary recovers.
  *
  * Nothing is hardcoded: the route network is fetched per station and cached
- * locally (localStorage, TTL below) — "we own the topology data, refreshed
- * periodically". Prices are always fetched live, with a short session cache
- * only to avoid hammering the API while the user browses.
+ * locally (localStorage, TTL below). Prices are always fetched live, with a
+ * short session cache only to avoid hammering the API while the user browses.
  */
 (function () {
   'use strict';
 
   const DB_API = 'https://v6.db.transport.rest';
   const DIREKT_API = 'https://api.direkt.bahn.guru';
+  const TRANSITOUS_API = 'https://api.transitous.org/api/v1';
 
   const TOPOLOGY_TTL_MS = 24 * 60 * 60 * 1000; // direct-route network: refresh daily
   const PRICE_TTL_MS = 15 * 60 * 1000;         // live prices: 15 min session cache
-  const MIN_REQUEST_SPACING_MS = 700;          // stay well under 100 req/min
+  const MIN_REQUEST_SPACING_MS = 700;          // bahn stack: stay well under 100 req/min
 
-  const listeners = { health: [] };
+  const RAIL_MODES = new Set([
+    'HIGHSPEED_RAIL', 'LONG_DISTANCE', 'NIGHT_RAIL',
+    'REGIONAL_FAST_RAIL', 'REGIONAL_RAIL', 'RAIL',
+  ]);
+  const MAX_FALLBACK_TRIPS = 40; // trip look-ups per station in fallback mode
+
+  /* ---- source mode ---- */
+  let mode = 'primary'; // 'primary' (bahn stack) | 'fallback' (Transitous)
+  const listeners = { health: [], mode: [] };
   function onHealth(fn) { listeners.health.push(fn); }
+  function onMode(fn) { listeners.mode.push(fn); }
   function reportHealth(source, ok, detail) {
     listeners.health.forEach((fn) => fn(source, ok, detail));
+  }
+  function setMode(next, reason) {
+    if (mode === next) return;
+    mode = next;
+    listeners.mode.forEach((fn) => fn(mode, reason));
   }
 
   const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
@@ -75,7 +95,12 @@
     throw lastErr; // unreachable, satisfies control flow
   }
 
-  /* ---- global request queue: spaces out API calls, cancellable ---- */
+  /** true for errors that mean "source down", not "bad request" */
+  function isOutage(err) {
+    return !err.status || RETRYABLE_STATUS.has(err.status);
+  }
+
+  /* ---- global request queue for the bahn stack: spaces out calls ---- */
   let queueChain = Promise.resolve();
   let lastRequestAt = 0;
   function enqueue(taskFn) {
@@ -87,6 +112,18 @@
     });
     queueChain = run.catch(() => {});
     return run;
+  }
+
+  /* small parallel worker pool (Transitous handles concurrency fine) */
+  async function parallelEach(items, concurrency, workFn) {
+    let i = 0;
+    const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (i < items.length) {
+        const item = items[i]; i += 1;
+        try { await workFn(item); } catch { /* one bad trip must not kill the batch */ }
+      }
+    });
+    await Promise.all(workers);
   }
 
   /* ---- storage helpers (fail soft if storage is unavailable) ---- */
@@ -104,8 +141,22 @@
     try { storage.setItem(key, JSON.stringify({ at: Date.now(), value })); } catch { /* full/blocked */ }
   }
 
-  /* ---- station search (autocomplete) ---- */
-  async function searchStations(query) {
+  /* ---- boot: pick the source stack ---- */
+  function ping() {
+    return fetchJSON(`${DB_API}/locations?query=berlin&results=1`, { source: 'db', retries: 0, timeoutMs: 12000 });
+  }
+  async function init() {
+    try {
+      await ping();
+      setMode('primary');
+    } catch (err) {
+      setMode('fallback', err.message);
+    }
+    return mode;
+  }
+
+  /* ---- station search ---- */
+  async function searchStationsPrimary(query) {
     const url = `${DB_API}/locations?query=${encodeURIComponent(query)}&results=8&poi=false&addresses=false`;
     const data = await fetchJSON(url, { source: 'db' });
     return (Array.isArray(data) ? data : [])
@@ -116,17 +167,46 @@
         lat: r.location.latitude,
         lon: r.location.longitude,
         products: r.products || {},
+        src: 'db',
       }));
+  }
+
+  async function searchStationsFallback(query) {
+    const url = `${TRANSITOUS_API}/geocode?text=${encodeURIComponent(query)}&type=STOP`;
+    const data = await fetchJSON(url, { source: 'transitous' });
+    return (Array.isArray(data) ? data : [])
+      .filter((r) => r.type === 'STOP' && typeof r.lat === 'number' && (r.modes || []).some((m) => RAIL_MODES.has(m)))
+      .slice(0, 8)
+      .map((r) => ({
+        id: String(r.id),
+        name: r.name,
+        lat: r.lat,
+        lon: r.lon,
+        products: Object.fromEntries((r.modes || []).filter((m) => RAIL_MODES.has(m)).map((m) => [m.toLowerCase().replace(/_/g, ' '), true])),
+        src: 'transitous',
+      }));
+  }
+
+  async function searchStations(query) {
+    if (mode === 'primary') {
+      try {
+        return await searchStationsPrimary(query);
+      } catch (err) {
+        if (!isOutage(err)) throw err;
+        setMode('fallback', err.message); // bahn stack just died mid-session
+      }
+    }
+    return searchStationsFallback(query);
   }
 
   async function getStation(id) {
     const data = await fetchJSON(`${DB_API}/stops/${encodeURIComponent(id)}`, { source: 'db' });
     if (!data || !data.location) throw new Error(`Station ${id} not found`);
-    return { id: String(data.id), name: data.name, lat: data.location.latitude, lon: data.location.longitude };
+    return { id: String(data.id), name: data.name, lat: data.location.latitude, lon: data.location.longitude, src: 'db' };
   }
 
   /* ---- direct destinations (the route network we "own" + refresh) ---- */
-  function normalizeDestination(entry) {
+  function normalizeDirektDestination(entry) {
     if (!entry || !entry.id || !entry.location) return null;
     const lat = entry.location.latitude;
     const lon = entry.location.longitude;
@@ -140,23 +220,105 @@
     };
   }
 
-  async function getDirectDestinations(stationId, { force = false } = {}) {
-    const key = `trainmap:dest:v1:${stationId}`;
-    if (!force) {
-      const cached = storeGet(localStorage, key, TOPOLOGY_TTL_MS);
-      if (cached) return { destinations: cached.value, fetchedAt: cached.at, fromCache: true };
-    }
-    const url = `${DIREKT_API}/${encodeURIComponent(stationId)}?localTrainsOnly=false`;
+  async function directDestinationsPrimary(station) {
+    const url = `${DIREKT_API}/${encodeURIComponent(station.id)}?localTrainsOnly=false`;
     const data = await fetchJSON(url, { source: 'direkt' });
-    const destinations = (Array.isArray(data) ? data : [])
-      .map(normalizeDestination)
+    return (Array.isArray(data) ? data : [])
+      .map(normalizeDirektDestination)
       .filter(Boolean)
-      .filter((d) => d.id !== String(stationId));
-    storeSet(localStorage, key, destinations);
-    return { destinations, fetchedAt: Date.now(), fromCache: false };
+      .filter((d) => d.id !== String(station.id));
   }
 
-  /* ---- live prices (direct journeys only) ---- */
+  /* Fallback: departures at the origin (/stoptimes), then each train's full
+     stop sequence (/trip). Every stop downstream of the origin is a direct
+     destination; keep the fastest observed duration per station. */
+  const nearStation = (s, station) => Math.abs(s.lat - station.lat) < 0.01 && Math.abs(s.lon - station.lon) < 0.02;
+
+  async function directDestinationsFallback(station, onProgress) {
+    let stopId = station.id;
+    if (station.src !== 'transitous') {
+      // origin came from the bahn stack — resolve it in Transitous by name
+      const matches = await searchStationsFallback(station.name);
+      const near = matches.find((m) => nearStation(m, station)) || matches[0];
+      if (!near) throw new Error(`could not resolve "${station.name}" in the fallback source`);
+      stopId = near.id;
+    }
+    const now = new Date().toISOString();
+    const url = `${TRANSITOUS_API}/stoptimes?stopId=${encodeURIComponent(stopId)}&time=${encodeURIComponent(now)}&n=200`;
+    const st = await fetchJSON(url, { source: 'transitous' });
+
+    const rows = (Array.isArray(st.stopTimes) ? st.stopTimes : [])
+      .filter((r) => !r.cancelled && !r.tripCancelled && RAIL_MODES.has(r.mode)
+        && r.tripId && r.place && r.place.departure);
+    const byLine = new Map(); // one look-up per route+direction
+    for (const r of rows) {
+      const key = `${r.routeId || r.routeShortName || r.tripId}|${r.headsign || (r.tripTo && r.tripTo.name) || ''}`;
+      if (!byLine.has(key)) byLine.set(key, r);
+    }
+    const trips = [...byLine.values()].slice(0, MAX_FALLBACK_TRIPS);
+
+    const best = new Map();
+    let done = 0;
+    await parallelEach(trips, 4, async (r) => {
+      const trip = await fetchJSON(`${TRANSITOUS_API}/trip?tripId=${encodeURIComponent(r.tripId)}`, { source: 'transitous', retries: 1 });
+      done += 1;
+      if (onProgress) onProgress(done, trips.length);
+      const leg = (trip.legs || [])[0];
+      if (!leg) return;
+      const seq = [leg.from, ...(leg.intermediateStops || []), leg.to]
+        .filter((s) => s && typeof s.lat === 'number' && typeof s.lon === 'number');
+      const depMs = Date.parse(r.place.departure);
+      // locate the origin inside the trip: same departure instant, else proximity
+      let idx = seq.findIndex((s) => s.departure && Date.parse(s.departure) === depMs && nearStation(s, station));
+      if (idx < 0) idx = seq.findIndex((s) => nearStation(s, station));
+      if (idx < 0) return;
+      for (let i = idx + 1; i < seq.length; i += 1) {
+        const s = seq[i];
+        const arrIso = s.arrival || s.scheduledArrival;
+        if (!arrIso || nearStation(s, station)) continue;
+        const durationMin = Math.round((Date.parse(arrIso) - depMs) / 60000);
+        if (durationMin <= 0 || durationMin > 48 * 60) continue;
+        const key = s.parentId || s.stopId || s.name;
+        const cur = best.get(key);
+        if (!cur || durationMin < cur.durationMin) {
+          best.set(key, {
+            id: String(s.stopId || key),
+            name: s.name,
+            lat: s.lat,
+            lon: s.lon,
+            durationMin,
+            sample: { line: r.displayName || r.routeShortName || 'train', dep: r.place.departure, arr: arrIso },
+          });
+        }
+      }
+    });
+    return [...best.values()].sort((a, b) => a.durationMin - b.durationMin);
+  }
+
+  async function getDirectDestinations(station, { force = false, onProgress } = {}) {
+    const sourceName = mode === 'primary' ? 'direkt' : 'transitous';
+    const key = `trainmap:dest:v2:${sourceName}:${station.id}`;
+    if (!force) {
+      const cached = storeGet(localStorage, key, TOPOLOGY_TTL_MS);
+      if (cached) return { destinations: cached.value, fetchedAt: cached.at, fromCache: true, source: sourceName };
+    }
+    let destinations;
+    if (mode === 'primary') {
+      try {
+        destinations = await directDestinationsPrimary(station);
+      } catch (err) {
+        if (!isOutage(err)) throw err;
+        setMode('fallback', err.message);
+        return getDirectDestinations(station, { force, onProgress });
+      }
+    } else {
+      destinations = await directDestinationsFallback(station, onProgress);
+    }
+    storeSet(localStorage, key, destinations);
+    return { destinations, fetchedAt: Date.now(), fromCache: false, source: sourceName };
+  }
+
+  /* ---- live prices (bahn stack only — Transitous has no fares) ---- */
   function summarizeJourneys(data) {
     const journeys = (data && Array.isArray(data.journeys)) ? data.journeys : [];
     let best = null;
@@ -198,13 +360,11 @@
     return `https://int.bahn.de/en/buchung/fahrplan/suche#sts=true&so=${encodeURIComponent(fromName)}&zo=${encodeURIComponent(toName)}&hd=${hd}`;
   }
 
-  /* one cheap request, no retries — used at boot to detect upstream outages */
-  function ping() {
-    return fetchJSON(`${DB_API}/locations?query=berlin&results=1`, { source: 'db', retries: 0, timeoutMs: 12000 });
-  }
-
   window.TrainmapAPI = {
+    init,
     ping,
+    get mode() { return mode; },
+    onMode,
     searchStations,
     getStation,
     getDirectDestinations,

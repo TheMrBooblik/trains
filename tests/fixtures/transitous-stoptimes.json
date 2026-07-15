@@ -1,0 +1,102 @@
+{
+  "stopTimes": [
+    {
+      "place": {
+        "name": "S+U Berlin Hauptbahnhof",
+        "stopId": "de-DELFI_de:11000:900003200:4:56",
+        "parentId": "de-DELFI_de:11000:900003201",
+        "lat": 52.52519,
+        "lon": 13.369752,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T08:00:00Z",
+        "scheduledDeparture": "2026-07-15T08:00:00Z",
+        "track": "7",
+        "cancelled": false
+      },
+      "mode": "HIGHSPEED_RAIL",
+      "realTime": true,
+      "headsign": "Hamburg Hbf",
+      "tripTo": { "name": "Hamburg Hbf", "stopId": "de-DELFI_hh", "lat": 53.552736, "lon": 10.006909 },
+      "agencyName": "DB Fernverkehr AG",
+      "routeId": "de-DELFI_r_ice_1",
+      "tripId": "20260715_T1",
+      "routeShortName": "ICE 802",
+      "displayName": "ICE 802",
+      "cancelled": false,
+      "tripCancelled": false
+    },
+    {
+      "place": {
+        "name": "S+U Berlin Hauptbahnhof",
+        "stopId": "de-DELFI_de:11000:900003200:1:50",
+        "parentId": "de-DELFI_de:11000:900003201",
+        "lat": 52.52496,
+        "lon": 13.368911,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T08:05:00Z",
+        "scheduledDeparture": "2026-07-15T08:05:00Z",
+        "track": "1",
+        "cancelled": false
+      },
+      "mode": "REGIONAL_RAIL",
+      "realTime": true,
+      "headsign": "Cottbus Hbf",
+      "tripTo": { "name": "Cottbus Hbf", "stopId": "de-DELFI_cb", "lat": 51.756332, "lon": 14.332887 },
+      "agencyName": "DB Regio AG",
+      "routeId": "de-DELFI_r_re_2",
+      "tripId": "20260715_T2",
+      "routeShortName": "RE 2",
+      "displayName": "RE 2",
+      "cancelled": false,
+      "tripCancelled": false
+    },
+    {
+      "place": {
+        "name": "S+U Berlin Hauptbahnhof",
+        "stopId": "de-DELFI_de:11000:900003200:4:56",
+        "parentId": "de-DELFI_de:11000:900003201",
+        "lat": 52.52519,
+        "lon": 13.369752,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T09:00:00Z",
+        "scheduledDeparture": "2026-07-15T09:00:00Z",
+        "track": "7",
+        "cancelled": false
+      },
+      "mode": "HIGHSPEED_RAIL",
+      "realTime": true,
+      "headsign": "Hamburg Hbf",
+      "tripTo": { "name": "Hamburg Hbf", "stopId": "de-DELFI_hh", "lat": 53.552736, "lon": 10.006909 },
+      "agencyName": "DB Fernverkehr AG",
+      "routeId": "de-DELFI_r_ice_1",
+      "tripId": "20260715_T3_should_be_deduped",
+      "routeShortName": "ICE 804",
+      "displayName": "ICE 804",
+      "cancelled": false,
+      "tripCancelled": false
+    },
+    {
+      "place": {
+        "name": "Berlin Hauptbahnhof (bus)",
+        "stopId": "de-DELFI_bus1",
+        "parentId": "de-DELFI_de:11000:900003201",
+        "lat": 52.5251,
+        "lon": 13.3688,
+        "tz": "Europe/Berlin",
+        "departure": "2026-07-15T08:02:00Z",
+        "cancelled": false
+      },
+      "mode": "BUS",
+      "realTime": false,
+      "headsign": "Flughafen BER",
+      "tripTo": { "name": "Flughafen BER", "stopId": "de-DELFI_ber", "lat": 52.3644, "lon": 13.5099 },
+      "agencyName": "BVG",
+      "routeId": "de-DELFI_r_bus_x9",
+      "tripId": "20260715_TBUS",
+      "routeShortName": "X9",
+      "displayName": "X9",
+      "cancelled": false,
+      "tripCancelled": false
+    }
+  ]
+}
