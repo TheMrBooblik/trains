@@ -27,6 +27,7 @@ workflow deploys it on every push to `main` — free hosting.
 | Station search | [`v6.db.transport.rest`](https://v6.db.transport.rest) — free community REST API over Deutsche Bahn's live HAFAS endpoint | live |
 | Direct-route network per station | [`api.direkt.bahn.guru`](https://direkt.bahn.guru) — index of no-change connections derived from live timetable data | fetched live, cached locally for 24 h ("we own the topology") |
 | Prices & departure times | `v6.db.transport.rest /journeys` (`transfers=0`) — real bahn.de fares | always live (15-min session cache only) |
+| Automatic fallback (when the bahn stack is down) | [`api.transitous.org`](https://transitous.org) — worldwide community MOTIS instance: station search + direct destinations from live departures; no fares | live |
 | Map tiles | OpenStreetMap | live |
 
 Both APIs are keyless, CORS-enabled and free. All requests go **directly from the

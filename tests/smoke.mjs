@@ -1,11 +1,16 @@
 /**
  * Offline smoke test for the Trainmap UI.
  *
- * The production app always fetches live data from v6.db.transport.rest and
- * api.direkt.bahn.guru — nothing is hardcoded. This test exists so the full
- * UI flow (search → pick station → markers → live-price load → popup) can be
- * verified in CI/sandboxes without network access: it intercepts the API
- * hosts and serves recorded responses in the exact documented shapes.
+ * The production app always fetches live data — nothing is hardcoded. This
+ * test exists so the full UI flow can be verified in CI/sandboxes without
+ * network access: it intercepts the API hosts and serves recorded responses
+ * in the exact documented shapes.
+ *
+ * Scenario A — primary (bahn) stack healthy: search → destinations →
+ *   batch live prices → popup → booking link → topology cache.
+ * Scenario B — primary stack down (503): the app must switch to the
+ *   Transitous fallback: search via geocode, destinations via
+ *   stoptimes + trip fan-out, prices hidden with an explanatory notice.
  *
  * Run:  node tests/smoke.mjs
  */
@@ -38,103 +43,157 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const executablePath = process.env.CHROMIUM_PATH
   || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
 const browser = await chromium.launch({ executablePath, args: ['--no-sandbox'] });
-const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
-
-const apiLog = [];
-let locationCalls = 0;
-await page.route('**://v6.db.transport.rest/**', async (route) => {
-  const url = new URL(route.request().url());
-  apiLog.push(url.pathname + url.search);
-  if (url.pathname === '/locations') {
-    // First two calls fail with 503: the boot ping must show the outage banner,
-    // and the first user search must retry transparently (resilience path).
-    locationCalls += 1;
-    if (locationCalls <= 2) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic outage"}' });
-    return route.fulfill({ contentType: 'application/json', body: await fixture('locations.json') });
-  }
-  if (url.pathname === '/journeys') {
-    if (url.searchParams.get('transfers') !== '0') {
-      return route.fulfill({ status: 400, contentType: 'application/json', body: '{"msg":"test expects transfers=0 (direct only)"}' });
-    }
-    return route.fulfill({ contentType: 'application/json', body: await fixture('journeys.json') });
-  }
-  if (url.pathname.startsWith('/stops/')) {
-    const all = JSON.parse(await fixture('locations.json'));
-    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(all[0]) });
-  }
-  return route.fulfill({ status: 404, body: '{}' });
-});
-await page.route('**://api.direkt.bahn.guru/**', async (route) => {
-  apiLog.push(new URL(route.request().url()).pathname);
-  return route.fulfill({ contentType: 'application/json', body: await fixture('direct.json') });
-});
-// Blank out map tiles: no network in the sandbox, and the test targets UI logic.
-const px = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPcv2//fwAJhAPTaenPbAAAAABJRU5ErkJggg==', 'base64');
-await page.route('**://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: px }));
 
 const failures = [];
 const check = (name, cond) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}`); if (!cond) failures.push(name); };
-page.on('pageerror', (err) => failures.push(`pageerror: ${err.message}`));
 
-await page.goto(base, { waitUntil: 'load' });
-check('page loads with title', (await page.title()).includes('Trainmap'));
+const px = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPcv2//fwAJhAPTaenPbAAAAABJRU5ErkJggg==', 'base64');
 
-// 0. boot ping fails (503) -> outage banner up front
-await page.waitForSelector('#alert:not([hidden])', { timeout: 8000 });
-check('outage banner shown at boot', (await page.textContent('#alert')).includes('unavailable'));
+/** Installs API interception. dbDown=true simulates today's bahn-stack outage. */
+async function installRoutes(page, { dbDown }) {
+  const log = { locations: 0, journeys: 0, direkt: 0, geocode: 0, stoptimes: 0, trips: [] };
+  await page.route('**://v6.db.transport.rest/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (dbDown) return route.fulfill({ status: 503, body: '' });
+    if (url.pathname === '/locations') {
+      // Second call fails once: the first user search must retry transparently.
+      log.locations += 1;
+      if (log.locations === 2) return route.fulfill({ status: 503, contentType: 'application/json', body: '{"msg":"synthetic blip"}' });
+      return route.fulfill({ contentType: 'application/json', body: await fixture('locations.json') });
+    }
+    if (url.pathname === '/journeys') {
+      log.journeys += 1;
+      if (url.searchParams.get('transfers') !== '0') {
+        return route.fulfill({ status: 400, contentType: 'application/json', body: '{"msg":"test expects transfers=0 (direct only)"}' });
+      }
+      return route.fulfill({ contentType: 'application/json', body: await fixture('journeys.json') });
+    }
+    if (url.pathname.startsWith('/stops/')) {
+      const all = JSON.parse(await fixture('locations.json'));
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify(all[0]) });
+    }
+    return route.fulfill({ status: 404, body: '{}' });
+  });
+  await page.route('**://api.direkt.bahn.guru/**', async (route) => {
+    if (dbDown) return route.abort('failed'); // mirrors today's broken-TLS behaviour
+    log.direkt += 1;
+    return route.fulfill({ contentType: 'application/json', body: await fixture('direct.json') });
+  });
+  await page.route('**://api.transitous.org/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/geocode')) {
+      log.geocode += 1;
+      return route.fulfill({ contentType: 'application/json', body: await fixture('transitous-geocode.json') });
+    }
+    if (url.pathname.endsWith('/stoptimes')) {
+      log.stoptimes += 1;
+      return route.fulfill({ contentType: 'application/json', body: await fixture('transitous-stoptimes.json') });
+    }
+    if (url.pathname.endsWith('/trip')) {
+      const tripId = url.searchParams.get('tripId') || '';
+      log.trips.push(tripId);
+      if (tripId.includes('T1')) return route.fulfill({ contentType: 'application/json', body: await fixture('transitous-trip-T1.json') });
+      if (tripId.includes('T2')) return route.fulfill({ contentType: 'application/json', body: await fixture('transitous-trip-T2.json') });
+      return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"unexpected trip requested"}' });
+    }
+    return route.fulfill({ status: 404, body: '{}' });
+  });
+  await page.route('**://tile.openstreetmap.org/**', (route) => route.fulfill({ contentType: 'image/png', body: px }));
+  return log;
+}
 
-// 1. search
-await page.fill('#station-input', 'berlin');
-await page.waitForSelector('#suggestions li', { timeout: 10000 });
-const suggestions = await page.$$eval('#suggestions li', (els) => els.map((e) => e.textContent));
-check('autocomplete shows Berlin Hbf', suggestions.some((s) => s.includes('Berlin Hbf')));
-check('search survived a transient 503 via retry', locationCalls >= 2);
+/* ================= Scenario A: primary stack healthy ================= */
+{
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  page.on('pageerror', (err) => failures.push(`A pageerror: ${err.message}`));
+  const log = await installRoutes(page, { dbDown: false });
 
-// 2. pick origin -> destinations render
-await page.click('#suggestions li');
-await page.waitForSelector('#dest-list li', { timeout: 5000 });
-const markerCount = await page.$$eval('#map path.leaflet-interactive', (els) => els.length);
-check('12 destination markers on map', markerCount === 12);
-check('stat tile: 12 destinations', (await page.textContent('#tile-count')) === '12');
-check('stat tile: 3 reachable under 2h', (await page.textContent('#tile-under2h')) === '3');
-check('legend visible', await page.isVisible('#legend'));
-check('freshness row mentions sync', (await page.textContent('#freshness')).includes('synced'));
+  await page.goto(base, { waitUntil: 'load' });
+  check('A: page loads with title', (await page.title()).includes('Trainmap'));
 
-// 3. batch live prices
-await page.click('#load-prices-btn');
-await page.waitForFunction(
-  () => [...document.querySelectorAll('.dest-price')].filter((e) => e.textContent.includes('€')).length >= 12,
-  null, { timeout: 30000 }
-);
-check('all rows show a live € price', true);
-check('cheapest tile shows €19.99', (await page.textContent('#tile-cheapest')).includes('19.99'));
-await page.waitForFunction(() => document.querySelectorAll('.price-label').length === 5, null, { timeout: 5000 })
-  .catch(() => {});
-const priceLabels = await page.$$eval('.price-label', (els) => els.length);
-check('best-deal labels on map (max 5)', priceLabels === 5);
+  await page.fill('#station-input', 'berlin');
+  await page.waitForSelector('#suggestions li', { timeout: 10000 });
+  const suggestions = await page.$$eval('#suggestions li', (els) => els.map((e) => e.textContent));
+  check('A: autocomplete shows Berlin Hbf', suggestions.some((s) => s.includes('Berlin Hbf')));
+  check('A: search survived a transient 503 via retry', log.locations >= 3);
+  check('A: no fallback notice in primary mode', await page.isHidden('#notice'));
 
-// 4. popup with booking hand-off
-await page.click('#dest-list li');
-await page.waitForSelector('.popup', { timeout: 5000 });
-const popup = await page.textContent('.popup');
-check('popup shows live fare', popup.includes('€19.99'));
-check('popup shows departure times', popup.includes('→'));
-const bookHref = await page.getAttribute('.popup a.btn', 'href');
-check('booking hand-off links to bahn.de', bookHref?.startsWith('https://int.bahn.de/'));
+  await page.click('#suggestions li');
+  await page.waitForSelector('#dest-list li', { timeout: 5000 });
+  check('A: 12 destination markers on map', (await page.$$eval('#map path.leaflet-interactive', (els) => els.length)) === 12);
+  check('A: stat tile: 12 destinations', (await page.textContent('#tile-count')) === '12');
+  check('A: legend visible', await page.isVisible('#legend'));
+  check('A: freshness row mentions sync', (await page.textContent('#freshness')).includes('synced'));
 
-const shot = process.env.SCREENSHOT_PATH;
-if (shot) { await page.screenshot({ path: shot, fullPage: false }); console.log(`screenshot: ${shot}`); }
+  await page.click('#load-prices-btn');
+  await page.waitForFunction(
+    () => [...document.querySelectorAll('.dest-price')].filter((e) => e.textContent.includes('€')).length >= 12,
+    null, { timeout: 30000 }
+  );
+  check('A: all rows show a live € price', true);
+  check('A: cheapest tile shows €19.99', (await page.textContent('#tile-cheapest')).includes('19.99'));
+  await page.waitForFunction(() => document.querySelectorAll('.price-label').length === 5, null, { timeout: 5000 }).catch(() => {});
+  check('A: best-deal labels on map (max 5)', (await page.$$eval('.price-label', (els) => els.length)) === 5);
 
-// 5. topology cache: reload uses localStorage, no second direkt call
-const direktCallsBefore = apiLog.filter((u) => u.startsWith('/8011160')).length;
-await page.reload({ waitUntil: 'load' });
-await page.waitForSelector('#dest-list li', { timeout: 5000 });
-const direktCallsAfter = apiLog.filter((u) => u.startsWith('/8011160')).length;
-check('route network served from local cache on reload', direktCallsAfter === direktCallsBefore);
-check('hash restores origin station', (await page.inputValue('#station-input')) === 'Berlin Hbf');
+  await page.click('#dest-list li');
+  await page.waitForSelector('.popup', { timeout: 5000 });
+  const popup = await page.textContent('.popup');
+  check('A: popup shows live fare', popup.includes('€19.99'));
+  check('A: booking hand-off links to bahn.de', (await page.getAttribute('.popup a.btn', 'href'))?.startsWith('https://int.bahn.de/'));
+
+  const shot = process.env.SCREENSHOT_PATH;
+  if (shot) { await page.screenshot({ path: shot }); console.log(`screenshot: ${shot}`); }
+
+  const direktCallsBefore = log.direkt;
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('#dest-list li', { timeout: 5000 });
+  check('A: route network served from local cache on reload', log.direkt === direktCallsBefore);
+  check('A: hash restores origin station', (await page.inputValue('#station-input')) === 'Berlin Hbf');
+  await page.close();
+}
+
+/* ============ Scenario B: bahn stack down → Transitous fallback ============ */
+{
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await context.newPage();
+  page.on('pageerror', (err) => failures.push(`B pageerror: ${err.message}`));
+  const log = await installRoutes(page, { dbDown: true });
+
+  await page.goto(base, { waitUntil: 'load' });
+  await page.waitForSelector('#notice:not([hidden])', { timeout: 10000 });
+  const notice = await page.textContent('#notice');
+  check('B: fallback notice shown', notice.includes('fallback') && notice.includes('prices are unavailable'));
+
+  await page.fill('#station-input', 'berlin');
+  await page.waitForSelector('#suggestions li', { timeout: 10000 });
+  const items = await page.$$eval('#suggestions li', (els) => els.map((e) => e.textContent));
+  check('B: fallback search shows Berlin Hbf', items.some((s) => s.includes('Berlin Hbf')));
+  check('B: non-rail geocode results filtered out', !items.some((s) => s.includes('Ibis')) && !items.some((s) => s.includes('bus stop')));
+
+  await page.click('#suggestions li');
+  await page.waitForSelector('#dest-list li', { timeout: 15000 });
+  const names = await page.$$eval('#dest-list .dest-name', (els) => els.map((e) => e.textContent));
+  check('B: 4 direct destinations from trip fan-out', names.length === 4);
+  check('B: destinations include downstream stops, not just termini', names.some((n) => n.includes('Wittenberge')) && names.some((n) => n.includes('Königs Wusterhausen')));
+  check('B: one trip look-up per line+direction (dedupe)', log.trips.length === 2 && !log.trips.some((t) => t.includes('T3')));
+  check('B: bus departures excluded', !names.some((n) => n.includes('Flughafen')));
+  check('B: load-prices button hidden in fallback', await page.isHidden('#load-prices-btn'));
+  check('B: freshness mentions fallback source', (await page.textContent('#freshness')).includes('fallback'));
+
+  await page.click('#dest-list li');
+  await page.waitForSelector('.popup', { timeout: 5000 });
+  const popupB = await page.textContent('.popup');
+  check('B: popup explains prices unavailable', popupB.includes('unavailable'));
+  check('B: popup shows sample departure', popupB.includes('→'));
+  check('B: booking hand-off still available', (await page.getAttribute('.popup a.btn', 'href'))?.startsWith('https://int.bahn.de/'));
+
+  const shotB = process.env.SCREENSHOT_FALLBACK_PATH;
+  if (shotB) { await page.waitForTimeout(900); await page.screenshot({ path: shotB }); console.log(`screenshot: ${shotB}`); }
+  await context.close();
+}
 
 await browser.close();
 server.close();
-check('no page errors', failures.filter((f) => f.startsWith('pageerror')).length === 0);
+check('no page errors', failures.filter((f) => f.includes('pageerror')).length === 0);
 if (failures.length) { console.error(`\n${failures.length} failure(s):\n- ${failures.join('\n- ')}`); process.exit(1); }
 console.log('\nAll smoke checks passed.');

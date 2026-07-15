@@ -47,6 +47,7 @@
       </section>
 
       <div id="alert" class="alert" hidden></div>
+      <div id="notice" class="notice" hidden></div>
 
       <section class="tiles" id="tiles" hidden>
         <div class="tile">
@@ -91,6 +92,7 @@
       <footer class="status">
         <div class="status-row"><span class="dot" id="dot-db"></span> Timetables &amp; prices: <a href="https://v6.db.transport.rest" target="_blank" rel="noopener">bahn.de HAFAS (live)</a> <span id="status-db" class="status-note">idle</span></div>
         <div class="status-row"><span class="dot" id="dot-direkt"></span> Direct-route network: <a href="https://direkt.bahn.guru" target="_blank" rel="noopener">direkt.bahn.guru</a> <span id="status-direkt" class="status-note">idle</span></div>
+        <div class="status-row"><span class="dot" id="dot-transitous"></span> Fallback timetables: <a href="https://transitous.org" target="_blank" rel="noopener">transitous.org</a> <span id="status-transitous" class="status-note">idle</span></div>
         <div class="status-row" id="freshness" hidden></div>
         <div class="status-row disclaimer">Prototype · booking happens on the operator's own site · no data is fixed in code — everything above is fetched live.</div>
       </footer>

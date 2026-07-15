@@ -132,6 +132,16 @@ body {
 }
 .alert .alert-retry { display: block; margin-top: 8px; padding: 4px 12px; font-size: 12px; }
 
+.notice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #eda100;
+  color: var(--ink-1);
+  background: color-mix(in srgb, #eda100 9%, var(--surface-1));
+  font-size: 13px;
+}
+.notice .alert-retry { display: block; margin-top: 8px; padding: 4px 12px; font-size: 12px; }
+
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .tile {
   background: var(--page);
